@@ -150,7 +150,9 @@ export default function GoldTracker() {
                   <span className="text-5xl md:text-9xl font-black text-white tracking-tighter leading-none">
                     {latest?.local?.sell?.toLocaleString()}
                   </span>
-                  <span className="text-base md:text-xl text-slate-500 font-medium mb-1 md:mb-2 uppercase tracking-tight">VND / Chỉ</span>
+                  <span className="text-base md:text-xl text-slate-500 font-medium mb-1 md:mb-2 uppercase tracking-tight">
+                    VND / Chỉ
+                  </span>
                 </div>
 
                 <div className="flex flex-wrap justify-center md:justify-start gap-4">
@@ -194,7 +196,7 @@ export default function GoldTracker() {
         {/* Charts and Tables Section */}
         <Tabs defaultValue="table" className="space-y-12 mb-20">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
-            <h2 className="text-3xl font-bold tracking-tight text-white">Thống Kê Thị Trường</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-white">Thống kê giá vàng</h2>
             <TabsList className="bg-slate-900/50 border border-white/5 rounded-full p-1 h-12">
               <TabsTrigger
                 value="table"
@@ -211,6 +213,10 @@ export default function GoldTracker() {
             </TabsList>
           </div>
           <TabsContent value="table" className="mt-0 outline-none">
+            <div className="text-xl md:text-3xl mb-3 font-bold tracking-tight text-white">Vàng Ngọc Thẩm</div>
+            <div className="text-sm md:text-base mb-3 font-bold tracking-tight text-white">
+              Cập nhật lần cuối: {latest?.localLastUpdate ? new Date(latest.localLastUpdate).toLocaleString('vi-VN') : "N/A"}
+            </div>
             <Card className="bg-slate-900/20 border-white/5 rounded-[32px] md:rounded-[40px] overflow-hidden">
               <div className="overflow-x-auto">
                 <Table className="min-w-[500px] md:min-w-full">
@@ -275,14 +281,14 @@ export default function GoldTracker() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="h-[350px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                       <defs>
                         <linearGradient id="colorLocal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.05}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.05} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
@@ -295,48 +301,52 @@ export default function GoldTracker() {
                         tickLine={false}
                         tickFormatter={(val) => `${(val / 1000).toLocaleString()}k`}
                       />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
-                        itemStyle={{ fontSize: '12px' }}
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#000",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "16px",
+                        }}
+                        itemStyle={{ fontSize: "12px" }}
                       />
                       {/* 99.99 Lines (Emerald) */}
-                      <Area 
-                        type="monotone" 
-                        dataKey="sell" 
+                      <Area
+                        type="monotone"
+                        dataKey="sell"
                         name="Bán ra 99.99"
-                        stroke="#10b981" 
+                        stroke="#10b981"
                         strokeWidth={4}
-                        fill="url(#colorLocal)" 
+                        fill="url(#colorLocal)"
                         animationDuration={1500}
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="buy" 
+                      <Area
+                        type="monotone"
+                        dataKey="buy"
                         name="Mua vào 99.99"
-                        stroke="#10b981" 
+                        stroke="#10b981"
                         strokeWidth={2}
                         strokeDasharray="5 5"
-                        fill="transparent" 
+                        fill="transparent"
                         animationDuration={1500}
                       />
                       {/* 990 Lines (Orange) */}
-                      <Area 
-                        type="monotone" 
-                        dataKey="sell990" 
+                      <Area
+                        type="monotone"
+                        dataKey="sell990"
                         name="Bán ra 990"
-                        stroke="#f97316" 
+                        stroke="#f97316"
                         strokeWidth={3}
-                        fill="transparent" 
+                        fill="transparent"
                         animationDuration={1500}
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="buy990" 
+                      <Area
+                        type="monotone"
+                        dataKey="buy990"
                         name="Mua vào 990"
-                        stroke="#f97316" 
+                        stroke="#f97316"
                         strokeWidth={2}
                         strokeDasharray="5 5"
-                        fill="transparent" 
+                        fill="transparent"
                         animationDuration={1500}
                       />
                     </AreaChart>
@@ -356,14 +366,14 @@ export default function GoldTracker() {
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Global Spot</span>
                   </div>
                 </div>
-                
+
                 <div className="h-[350px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                       <defs>
                         <linearGradient id="colorWorldUsd" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
@@ -376,17 +386,21 @@ export default function GoldTracker() {
                         tickLine={false}
                         tickFormatter={(val) => `$${val.toLocaleString()}`}
                       />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
-                        itemStyle={{ color: '#fff', fontSize: '12px' }}
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#000",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "16px",
+                        }}
+                        itemStyle={{ color: "#fff", fontSize: "12px" }}
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="worldUsd" 
+                      <Area
+                        type="monotone"
+                        dataKey="worldUsd"
                         name="Giá Thế Giới (USD)"
-                        stroke="#3b82f6" 
+                        stroke="#3b82f6"
                         strokeWidth={4}
-                        fill="url(#colorWorldUsd)" 
+                        fill="url(#colorWorldUsd)"
                         animationDuration={1500}
                       />
                     </AreaChart>

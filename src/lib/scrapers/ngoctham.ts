@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 export interface GoldPriceItem {
   id: string;
@@ -16,26 +16,30 @@ export interface NgocThamResponse {
   }[];
 }
 
-export async function scrapeLocalGoldPrice(): Promise<GoldPriceItem[] | null> {
+export async function scrapeLocalGoldPrice(): Promise<{ items: GoldPriceItem[]; date: string } | null> {
   try {
-    const { data } = await axios.get('https://ngoctham.com/ajax/proxy_banggia.php', {
+    const { data } = await axios.get("https://ngoctham.com/ajax/proxy_banggia.php", {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://ngoctham.com/bang-gia-vang/'
-      }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        Referer: "https://ngoctham.com/bang-gia-vang/",
+      },
     });
 
     if (!data || !data.chitiet) {
       return null;
     }
 
-    return data.chitiet.map((item: { loaivang: string; giamua: string; giaban: string }) => ({
-      name: item.loaivang,
-      buy: parseInt(item.giamua),
-      sell: parseInt(item.giaban)
-    }));
+    return {
+      items: data.chitiet.map((item: { loaivang: string; giamua: string; giaban: string }) => ({
+        name: item.loaivang,
+        buy: parseInt(item.giamua),
+        sell: parseInt(item.giaban),
+      })),
+      date: data.date,
+    };
   } catch (error) {
-    console.error('Error fetching Ngoc Tham API:', error);
+    console.error("Error fetching Ngoc Tham API:", error);
     return null;
   }
 }
