@@ -215,7 +215,7 @@ export default function GoldTracker() {
           <TabsContent value="table" className="mt-0 outline-none">
             <div className="text-xl md:text-3xl mb-3 font-bold tracking-tight text-white">Vàng Ngọc Thẩm</div>
             <div className="text-sm md:text-base mb-3 font-bold tracking-tight text-white">
-              Cập nhật lần cuối: {latest?.localLastUpdate ? new Date(latest.localLastUpdate).toLocaleString('vi-VN') : "N/A"}
+              Cập nhật lần cuối: {latest?.localLastUpdate ? new Date(latest.localLastUpdate).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : "N/A"}
             </div>
             <Card className="bg-slate-900/20 border-white/5 rounded-[32px] md:rounded-[40px] overflow-hidden">
               <div className="overflow-x-auto">

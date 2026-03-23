@@ -88,7 +88,7 @@ export async function performGoldCrawl() {
           ━━━━━━━━━━━━━━━━━━
           ${notifications.join("\n\n")}
           ━━━━━━━━━━━━━━━━━━
-          <i>Cập nhật lúc: ${new Date().toLocaleString("vi-VN")}</i>
+          <i>Cập nhật lúc: ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</i>
         `.trim();
         await broadcastTelegramNotification(message);
       }
