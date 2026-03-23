@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Globe, MapPin, RefreshCw, Clock, ArrowRightLeft } from "lucide-react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { format } from "date-fns";
@@ -23,23 +23,27 @@ export default function GoldTracker() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [range, setRange] = useState<"day" | "week" | "month">("day");
 
-  const fetchData = async () => {
-    try {
-      const res = await fetch("/api/prices/history");
-      const history = await res.json();
-      if (Array.isArray(history)) {
-        setData(history);
-      } else {
-        console.error("API Error:", history.error);
-        setData([]);
+  const fetchData = useCallback(
+    async (targetRange: string = range) => {
+      try {
+        const res = await fetch(`/api/prices/history?range=${targetRange}`);
+        const history = await res.json();
+        if (Array.isArray(history)) {
+          setData(history);
+        } else {
+          console.error("API Error:", history.error);
+          setData([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch data", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch data", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [range],
+  );
 
   const handleManualUpdate = async () => {
     setRefreshing(true);
@@ -58,10 +62,10 @@ export default function GoldTracker() {
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 60000);
+    fetchData(range);
+    const interval = setInterval(() => fetchData(range), 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [range, fetchData]);
 
   const latest = data[0];
 
@@ -79,18 +83,48 @@ export default function GoldTracker() {
     );
   }
 
-  const chartData = [...data].reverse().map((item) => {
-    const gold990 = item.local_all?.find((g: any) => g.name === "Vàng Ta 990");
-    return {
-      time: format(new Date(item.timestamp), "HH:mm"),
-      buy: item.local.buy,
-      sell: item.local.sell,
-      buy990: gold990?.buy,
-      sell990: gold990?.sell,
-      worldVnd: item.world.vnd_per_chi,
-      worldUsd: item.world.usd_per_oz,
-    };
-  });
+  const getProcessedData = () => {
+    if (!data || data.length === 0) return [];
+
+    const now = new Date();
+    let filtered = [...data];
+
+    if (range === "day") {
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      filtered = data.filter((item) => new Date(item.timestamp) >= oneDayAgo);
+    } else if (range === "week") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      filtered = data.filter((item) => new Date(item.timestamp) >= oneWeekAgo);
+    } else if (range === "month") {
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      filtered = data.filter((item) => new Date(item.timestamp) >= oneMonthAgo);
+    }
+
+    // Since the API now returns optimized data for week/month,
+    // we only need simple mapping and minimal downsampling if the fallback was used.
+    let processed = [...filtered];
+    const targetPoints = 60;
+    if (processed.length > targetPoints) {
+      const step = Math.ceil(processed.length / targetPoints);
+      processed = processed.filter((_, idx) => idx % step === 0);
+    }
+
+    return processed.reverse().map((item) => {
+      const gold990 = item.local_all?.find((g: any) => g.name === "Vàng Ta 990");
+      const date = new Date(item.timestamp);
+      return {
+        time: range === "day" ? format(date, "HH:mm") : format(date, "dd/MM HH:mm"),
+        buy: item.local.buy,
+        sell: item.local.sell,
+        buy990: gold990?.buy,
+        sell990: gold990?.sell,
+        worldVnd: item.world.vnd_per_chi,
+        worldUsd: item.world.usd_per_oz,
+      };
+    });
+  };
+
+  const chartData = getProcessedData();
 
   return (
     <div className="min-h-screen bg-[#050505] text-slate-100 p-4 md:p-12 font-sans selection:bg-yellow-500/30">
@@ -194,28 +228,47 @@ export default function GoldTracker() {
         </div>
 
         {/* Charts and Tables Section */}
-        <Tabs defaultValue="table" className="space-y-12 mb-20">
+        <Tabs defaultValue="chart" className="space-y-12 mb-20">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
-            <h2 className="text-3xl font-bold tracking-tight text-white">Thống kê giá vàng</h2>
+            <div className="space-y-4">
+              <h2 className="text-3xl font-bold tracking-tight text-white">Thống kê giá vàng</h2>
+              <div className="flex bg-slate-900/50 border border-white/5 rounded-full p-1 h-10 w-fit">
+                {(["day", "week", "month"] as const).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRange(r)}
+                    className={cn(
+                      "rounded-full px-6 h-full text-[10px] font-bold uppercase transition-all",
+                      range === r ? "bg-white text-black" : "text-slate-400 hover:text-white",
+                    )}
+                  >
+                    {r === "day" ? "Hôm nay" : r === "week" ? "Tuần" : "Tháng"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <TabsList className="bg-slate-900/50 border border-white/5 rounded-full p-1 h-12">
-              <TabsTrigger
-                value="table"
-                className="rounded-full px-8 h-full data-[state=active]:bg-white data-[state=active]:text-black transition-all"
-              >
-                CHI TIẾT
-              </TabsTrigger>
               <TabsTrigger
                 value="chart"
                 className="rounded-full px-8 h-full data-[state=active]:bg-white data-[state=active]:text-black transition-all"
               >
                 XU HƯỚNG
               </TabsTrigger>
+              <TabsTrigger
+                value="table"
+                className="rounded-full px-8 h-full data-[state=active]:bg-white data-[state=active]:text-black transition-all"
+              >
+                CHI TIẾT
+              </TabsTrigger>
             </TabsList>
           </div>
           <TabsContent value="table" className="mt-0 outline-none">
             <div className="text-xl md:text-3xl mb-3 font-bold tracking-tight text-white">Vàng Ngọc Thẩm</div>
             <div className="text-sm md:text-base mb-3 font-bold tracking-tight text-white">
-              Cập nhật lần cuối: {latest?.localLastUpdate ? new Date(latest.localLastUpdate).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : "N/A"}
+              Cập nhật lần cuối:{" "}
+              {latest?.localLastUpdate
+                ? new Date(latest.localLastUpdate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+                : "N/A"}
             </div>
             <Card className="bg-slate-900/20 border-white/5 rounded-[32px] md:rounded-[40px] overflow-hidden">
               <div className="overflow-x-auto">
@@ -259,7 +312,17 @@ export default function GoldTracker() {
               <Card className="bg-slate-900/20 border-white/5 rounded-[32px] md:rounded-[40px] p-4 md:p-8 overflow-hidden h-auto">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 md:mb-10">
                   <div className="space-y-1">
-                    <h3 className="text-xl font-bold text-white tracking-tight">Giá Vàng Trong Nước</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-white tracking-tight">Giá Vàng Trong Nước</h3>
+                      <a
+                        href="https://ngoctham.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-400 hover:underline"
+                      >
+                        (Nguồn: NTJ)
+                      </a>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 md:gap-x-6 gap-y-2">
                     <div className="flex items-center gap-2">
@@ -358,7 +421,17 @@ export default function GoldTracker() {
               <Card className="bg-slate-900/20 border-white/5 rounded-[40px] p-8 overflow-hidden h-auto">
                 <div className="flex items-center justify-between mb-10">
                   <div className="space-y-1">
-                    <h3 className="text-xl font-bold text-white tracking-tight">Giá Vàng Thế Giới</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-white tracking-tight">Giá Vàng Thế Giới</h3>
+                      <a
+                        href="https://finance.yahoo.com/quote/GC%3DF"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-400 hover:underline"
+                      >
+                        (Nguồn: Yahoo Finance)
+                      </a>
+                    </div>
                     <p className="text-sm text-slate-500">Đơn vị USD / oz (Hợp đồng tương lai)</p>
                   </div>
                   <div className="flex items-center gap-2">

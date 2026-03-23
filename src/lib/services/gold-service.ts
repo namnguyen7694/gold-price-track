@@ -83,12 +83,14 @@ export async function performGoldCrawl() {
       }
 
       if (notifications.length > 0) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.vercel.app`;
         const message = `
           <b>BIẾN ĐỘNG THỊ TRƯỜNG</b>
           ━━━━━━━━━━━━━━━━━━
           ${notifications.join("\n\n")}
           ━━━━━━━━━━━━━━━━━━
           <i>Cập nhật lúc: ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</i>
+          👉 <a href="${appUrl}">Xem thêm</a>
         `.trim();
         await broadcastTelegramNotification(message);
       }
@@ -99,5 +101,20 @@ export async function performGoldCrawl() {
 
   // Save to Firestore
   await adminDb.collection("gold_prices").add(data);
+
+  // Save interval data for optimized charts
+  const now = new Date();
+  const hour = now.getHours();
+
+  // Save every 6 hours (00, 06, 12, 18)
+  if (hour % 6 === 0) {
+    await adminDb.collection("gold_prices_6h").add(data);
+  }
+
+  // Save every 24 hours (00)
+  if (hour === 0) {
+    await adminDb.collection("gold_prices_24h").add(data);
+  }
+
   return data;
 }
