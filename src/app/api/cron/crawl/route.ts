@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { performGoldCrawl } from '@/lib/services/gold-service';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
-  // Check for authorization (e.g. Vercel Cron Secret or custom API key)
+  // Check for authorization (e.g. Vercel Cron Secret)
   const authHeader = request.headers.get('Authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    console.error('Unauthorized cron attempt');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
