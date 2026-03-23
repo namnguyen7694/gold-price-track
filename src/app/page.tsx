@@ -260,7 +260,6 @@ export default function GoldTracker() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 md:mb-10">
                   <div className="space-y-1">
                     <h3 className="text-xl font-bold text-white tracking-tight">Giá Vàng Trong Nước</h3>
-                    <p className="text-sm text-slate-500">99.99 (Đậm) vs 990 (Nhạt)</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 md:gap-x-6 gap-y-2">
                     <div className="flex items-center gap-2">
@@ -302,6 +301,7 @@ export default function GoldTracker() {
                         tickFormatter={(val) => `${(val / 1000).toLocaleString()}k`}
                       />
                       <Tooltip
+                        formatter={(value: any) => [`${Number(value).toLocaleString()} VNĐ`]}
                         contentStyle={{
                           backgroundColor: "#000",
                           border: "1px solid rgba(255,255,255,0.1)",
@@ -387,6 +387,7 @@ export default function GoldTracker() {
                         tickFormatter={(val) => `$${val.toLocaleString()}`}
                       />
                       <Tooltip
+                        formatter={(value: any) => [`$${Number(value).toLocaleString()}`]}
                         contentStyle={{
                           backgroundColor: "#000",
                           border: "1px solid rgba(255,255,255,0.1)",
