@@ -7,15 +7,30 @@ export async function GET(request: Request) {
     const range = searchParams.get("range") || "day";
 
     let snapshot;
-    console.log(range);
     if (range === "day") {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      snapshot = await adminDb
+      const startAt = searchParams.get("startAt");
+      const endAt = searchParams.get("endAt");
+      let startOfDay;
+
+      if (startAt) {
+        const startAtNum = Number(startAt);
+        startOfDay = new Date(isNaN(startAtNum) ? startAt : startAtNum);
+      } else {
+        startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+      }
+
+      let query = adminDb
         .collection("gold_prices")
-        .where("timestamp", ">=", startOfDay.toISOString())
-        .orderBy("timestamp", "desc")
-        .get();
+        .where("timestamp", ">=", startOfDay.toISOString());
+
+      if (endAt) {
+        const endAtNum = Number(endAt);
+        const endDate = new Date(isNaN(endAtNum) ? endAt : endAtNum);
+        query = query.where("timestamp", "<=", endDate.toISOString());
+      }
+
+      snapshot = await query.orderBy("timestamp", "desc").get();
     } else if (range === "week") {
       snapshot = await adminDb.collection("gold_prices_6h").orderBy("timestamp", "desc").limit(100).get();
 

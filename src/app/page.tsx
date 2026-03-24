@@ -28,7 +28,14 @@ export default function GoldTracker() {
   const fetchData = useCallback(
     async (targetRange: string = range) => {
       try {
-        const res = await fetch(`/api/prices/history?range=${targetRange}`);
+        let url = `/api/prices/history?range=${targetRange}`;
+        if (targetRange === "day") {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          url += `&startAt=${startOfDay.getTime()}`;
+          url += `&endAt=${new Date().getTime()}`;
+        }
+        const res = await fetch(url);
         const history = await res.json();
         if (Array.isArray(history)) {
           setData(history);
