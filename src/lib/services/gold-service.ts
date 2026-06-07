@@ -124,54 +124,7 @@ export async function performGoldCrawl() {
   // Save every 24 hours (00:00 Vietnam time)
   if (vnHour === 0 && vnMinute === 0) {
     await adminDb.collection("gold_prices_24h").add(data);
-    
-    // Cleanup old high-frequency data at the start of a new day
-    // We keep the last 7 days of high-frequency data
-    await cleanupOldGoldData(7);
   }
 
   return data;
-}
-
-/**
- * Deletes old high-frequency gold price data to save storage.
- * Keeps data for the specified number of days.
- */
-export async function cleanupOldGoldData(retentionDays = 7) {
-  try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-    const cutoffIso = cutoffDate.toISOString();
-
-    console.log(`[Cleanup] Cleaning up gold prices older than ${cutoffIso} (${retentionDays} days)...`);
-
-    const collectionRef = adminDb.collection("gold_prices");
-    const snapshot = await collectionRef
-      .where("timestamp", "<", cutoffIso)
-      .limit(500) // Process in batches to avoid Firestore timeout/limits
-      .get();
-
-    if (snapshot.empty) {
-      console.log("[Cleanup] No old data found to delete.");
-      return;
-    }
-
-    const batch = adminDb.batch();
-    snapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-
-    await batch.commit();
-    console.log(`[Cleanup] Successfully deleted ${snapshot.size} old records.`);
-
-    // If there might be more, we could recursively call this, 
-    // but since this runs daily, 500 records should usually be enough 
-    // to clear out one day's worth of data if it runs frequently.
-    // However, if the job runs every 5 mins, that's ~288 records/day.
-    if (snapshot.size === 500) {
-      console.log("[Cleanup] Batch limit reached, more data might remain. Will be cleared in next runs.");
-    }
-  } catch (error) {
-    console.error("[Cleanup] Error during data cleanup:", error);
-  }
 }

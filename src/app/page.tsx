@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import CalendarPicker from "@/components/ui/CalendarPicker";
 
 // Helper for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -23,10 +24,28 @@ export default function GoldTracker() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [range, setRange] = useState<"day" | "week" | "month">("day");
+  const [range, setRange] = useState<"day" | "week" | "month" | "custom_day" >("day");
+  const [customDate, setCustomDate] = useState<string>(() => format(new Date(), "yyyy-MM-dd"));
+  const [liveData, setLiveData] = useState<any>(null);
+
+
+  const fetchLiveData = useCallback(async () => {
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const url = `/api/prices/history?range=day&startAt=${startOfDay.getTime()}&endAt=${new Date().getTime()}`;
+      const res = await fetch(url);
+      const history = await res.json();
+      if (Array.isArray(history) && history.length > 0) {
+        setLiveData(history[0]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch live data", error);
+    }
+  }, []);
 
   const fetchData = useCallback(
-    async (targetRange: string = range) => {
+    async (targetRange: "day" | "week" | "month" | "custom_day" = range, targetDate: string = customDate) => {
       try {
         let url = `/api/prices/history?range=${targetRange}`;
         if (targetRange === "day") {
@@ -34,6 +53,12 @@ export default function GoldTracker() {
           startOfDay.setHours(0, 0, 0, 0);
           url += `&startAt=${startOfDay.getTime()}`;
           url += `&endAt=${new Date().getTime()}`;
+        } else if (targetRange === "custom_day") {
+          const [year, month, day] = targetDate.split("-").map(Number);
+          const startAt = new Date(year, month - 1, day, 0, 0, 0, 0);
+          const endAt = new Date(year, month - 1, day, 23, 59, 59, 999);
+          url += `&startAt=${startAt.getTime()}`;
+          url += `&endAt=${endAt.getTime()}`;
         }
         const res = await fetch(url);
         const history = await res.json();
@@ -49,7 +74,7 @@ export default function GoldTracker() {
         setLoading(false);
       }
     },
-    [range],
+    [range, customDate],
   );
 
   const handleManualUpdate = async () => {
@@ -57,7 +82,7 @@ export default function GoldTracker() {
     try {
       const result = await manualCrawlAction();
       if (result.success) {
-        await fetchData();
+        await Promise.all([fetchLiveData(), fetchData()]);
       } else {
         alert("Failed to update: " + result.error);
       }
@@ -69,12 +94,17 @@ export default function GoldTracker() {
   };
 
   useEffect(() => {
-    fetchData(range);
-    const interval = setInterval(() => fetchData(range), 60000);
+    fetchLiveData();
+    fetchData(range, customDate);
+    const interval = setInterval(() => {
+      fetchLiveData();
+      fetchData(range, customDate);
+    }, 60000);
     return () => clearInterval(interval);
-  }, [range, fetchData]);
+  }, [range, customDate, fetchData, fetchLiveData]);
 
   const latest = data[0];
+  const activeLiveData = liveData || latest;
 
   if (loading) {
     return (
@@ -105,6 +135,9 @@ export default function GoldTracker() {
     } else if (range === "month") {
       const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       filtered = data.filter((item) => new Date(item.timestamp) >= oneMonthAgo);
+    } else if (range === "custom_day") {
+      // API already queries precise startAt/endAt for custom_day, no additional client-side filter is required.
+      filtered = [...data];
     }
 
     // Since the API now returns optimized data for week/month,
@@ -120,7 +153,7 @@ export default function GoldTracker() {
       const gold990 = item.local_all?.find((g: any) => g.name === "Vàng Ta 990");
       const date = new Date(item.timestamp);
       return {
-        time: range === "day" ? format(date, "HH:mm") : format(date, "dd/MM HH:mm"),
+        time: (range === "day" || range === "custom_day") ? format(date, "HH:mm") : format(date, "dd/MM HH:mm"),
         buy: item.local.buy,
         sell: item.local.sell,
         buy990: gold990?.buy,
@@ -150,7 +183,7 @@ export default function GoldTracker() {
             </h1>
             <p className="text-slate-500 text-sm md:text-lg font-light flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-600" />
-              Cập nhật {latest ? format(new Date(latest.timestamp), "HH:mm, dd/MM") : "ngay bây giờ"}
+              Cập nhật {activeLiveData ? format(new Date(activeLiveData.timestamp), "HH:mm, dd/MM") : "ngay bây giờ"}
             </p>
           </div>
 
@@ -175,7 +208,7 @@ export default function GoldTracker() {
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
-                    {latest?.local?.name}
+                    {activeLiveData?.local?.name}
                   </CardDescription>
                   <CardTitle className="text-3xl md:text-4xl font-medium text-white">Ngọc Thẩm</CardTitle>
                 </div>
@@ -189,7 +222,7 @@ export default function GoldTracker() {
               <div className="space-y-6 md:space-y-8 mt-4 text-center md:text-left">
                 <div className="flex flex-col md:flex-row md:items-end justify-center md:justify-start gap-1 md:gap-6">
                   <span className="text-5xl md:text-9xl font-black text-white tracking-tighter leading-none">
-                    {latest?.local?.sell?.toLocaleString()}
+                    {activeLiveData?.local?.sell?.toLocaleString() ?? "—"}
                   </span>
                   <span className="text-base md:text-xl text-slate-500 font-medium mb-1 md:mb-2 uppercase tracking-tight">
                     VND / Chỉ
@@ -199,14 +232,14 @@ export default function GoldTracker() {
                 <div className="flex flex-wrap justify-center md:justify-start gap-4">
                   <div className="bg-white/5 border border-white/5 rounded-2xl px-6 py-4 flex flex-col">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Giá Mua</span>
-                    <span className="text-lg font-bold text-slate-200">{latest?.local?.buy?.toLocaleString()}</span>
+                    <span className="text-lg font-bold text-slate-200">{activeLiveData?.local?.buy?.toLocaleString() ?? "—"}</span>
                   </div>
                   <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl px-6 py-4 flex flex-col">
                     <span className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-1">
                       Chênh lệch
                     </span>
                     <span className="text-lg font-bold text-emerald-500">
-                      {(latest?.local?.sell - latest?.local?.buy).toLocaleString()}
+                      {(activeLiveData?.local?.sell && activeLiveData?.local?.buy) ? (activeLiveData.local.sell - activeLiveData.local.buy).toLocaleString() : "—"}
                     </span>
                   </div>
                 </div>
@@ -218,14 +251,14 @@ export default function GoldTracker() {
           <div className="lg:col-span-4 flex flex-col gap-6">
             <StatCard
               title="Giá Thế Giới"
-              value={latest?.world?.usd_per_oz}
-              subtext={`${latest?.world?.vnd_per_chi?.toLocaleString()} VND / Chỉ (Quy đổi)`}
+              value={activeLiveData?.world?.usd_per_oz}
+              subtext={activeLiveData?.world ? `${activeLiveData.world.vnd_per_chi?.toLocaleString()} VND / Chỉ (Quy đổi)` : "—"}
               icon={<Globe className="w-5 h-5 text-blue-500" />}
               unit="USD"
             />
             <StatCard
               title="Chênh lệch"
-              value={latest?.diff}
+              value={activeLiveData?.diff}
               subtext="Trong nước vs Thế giới"
               icon={<ArrowRightLeft className="w-5 h-5 text-purple-500" />}
               unit="VND"
@@ -239,19 +272,39 @@ export default function GoldTracker() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
             <div className="space-y-4">
               <h2 className="text-3xl font-bold tracking-tight text-white">Thống kê giá vàng</h2>
-              <div className="flex bg-slate-900/50 border border-white/5 rounded-full p-1 h-10 w-fit">
-                {(["day", "week", "month"] as const).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setRange(r)}
-                    className={cn(
-                      "rounded-full px-6 h-full text-[10px] font-bold uppercase transition-all",
-                      range === r ? "bg-white text-black" : "text-slate-400 hover:text-white",
-                    )}
-                  >
-                    {r === "day" ? "Hôm nay" : r === "week" ? "Tuần" : "Tháng"}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex bg-slate-900/50 border border-white/5 rounded-full p-1 h-10 w-fit">
+                  {(["day", "week", "month", "custom_day"] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setRange(r)}
+                      className={cn(
+                        "rounded-full px-4 md:px-6 h-full text-[10px] font-bold uppercase transition-all",
+                        range === r ? "bg-white text-black" : "text-slate-400 hover:text-white",
+                      )}
+                    >
+                      {r === "day" ? "Hôm nay" : r === "week" ? "Tuần" : r === "month" ? "Tháng" : "Chọn ngày"}
+                    </button>
+                  ))}
+                </div>
+
+                {range === "custom_day" && (
+                  <div className="flex items-center gap-2 animate-fade-in select-none">
+                    <CalendarPicker
+                      selectedDate={(() => {
+                        if (!customDate || !customDate.includes("-")) return "";
+                        const [yyyy, mm, dd] = customDate.split("-");
+                        return `${dd}/${mm}/${yyyy}`;
+                      })()}
+                      onChange={(dateStr) => {
+                        const [dd, mm, yyyy] = dateStr.split("/");
+                        const yyyyMmDd = `${yyyy}-${mm}-${dd}`;
+                        setCustomDate(yyyyMmDd);
+                        fetchData("custom_day", yyyyMmDd);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <TabsList className="bg-slate-900/50 border border-white/5 rounded-full p-1 h-12">
@@ -279,36 +332,42 @@ export default function GoldTracker() {
             </div>
             <Card className="bg-slate-900/20 border-white/5 rounded-[32px] md:rounded-[40px] overflow-hidden">
               <div className="overflow-x-auto">
-                <Table className="min-w-[500px] md:min-w-full">
-                  <TableHeader className="bg-white/5">
-                    <TableRow className="border-white/5 hover:bg-transparent">
-                      <TableHead className="px-6 md:px-8 py-4 md:py-6 text-[10px] font-bold uppercase tracking-widest text-slate-500 h-auto">
-                        Loại Vàng
-                      </TableHead>
-                      <TableHead className="px-6 md:px-8 py-4 md:py-6 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right h-auto">
-                        Giá Mua
-                      </TableHead>
-                      <TableHead className="px-6 md:px-8 py-4 md:py-6 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right h-auto">
-                        Giá Bán
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(latest?.local_all || [latest?.local]).map((item: any, idx: number) => (
-                      <TableRow key={idx} className="border-white/5 group hover:bg-white/[0.02] transition-colors">
-                        <TableCell className="px-6 md:px-8 py-4 md:py-6 font-medium text-slate-300 group-hover:text-white">
-                          {item.name}
-                        </TableCell>
-                        <TableCell className="px-6 md:px-8 py-4 md:py-6 font-bold text-right text-slate-400">
-                          {item.buy.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="px-6 md:px-8 py-4 md:py-6 font-black text-right text-yellow-500/80 group-hover:text-yellow-500">
-                          {item.sell.toLocaleString()}
-                        </TableCell>
+                {latest ? (
+                  <Table className="min-w-[500px] md:min-w-full">
+                    <TableHeader className="bg-white/5">
+                      <TableRow className="border-white/5 hover:bg-transparent">
+                        <TableHead className="px-6 md:px-8 py-4 md:py-6 text-[10px] font-bold uppercase tracking-widest text-slate-500 h-auto">
+                          Loại Vàng
+                        </TableHead>
+                        <TableHead className="px-6 md:px-8 py-4 md:py-6 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right h-auto">
+                          Giá Mua
+                        </TableHead>
+                        <TableHead className="px-6 md:px-8 py-4 md:py-6 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right h-auto">
+                          Giá Bán
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {(latest.local_all || [latest.local]).map((item: any, idx: number) => (
+                        <TableRow key={idx} className="border-white/5 group hover:bg-white/[0.02] transition-colors">
+                          <TableCell className="px-6 md:px-8 py-4 md:py-6 font-medium text-slate-300 group-hover:text-white">
+                            {item?.name ?? "—"}
+                          </TableCell>
+                          <TableCell className="px-6 md:px-8 py-4 md:py-6 font-bold text-right text-slate-400">
+                            {item?.buy?.toLocaleString() ?? "—"}
+                          </TableCell>
+                          <TableCell className="px-6 md:px-8 py-4 md:py-6 font-black text-right text-yellow-500/80 group-hover:text-yellow-500">
+                            {item?.sell?.toLocaleString() ?? "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 text-slate-500 font-light">
+                    Không có dữ liệu chi tiết cho ngày đã chọn
+                  </div>
+                )}
               </div>
             </Card>
           </TabsContent>
@@ -351,76 +410,80 @@ export default function GoldTracker() {
                   </div>
                 </div>
 
-                <div className="h-[350px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="colorLocal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.05} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                      <XAxis dataKey="time" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis
-                        domain={["auto", "auto"]}
-                        stroke="#444"
-                        fontSize={10}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(val) => `${(val / 1000).toLocaleString()}k`}
-                      />
-                      <Tooltip
-                        formatter={(value: any) => [`${Number(value).toLocaleString()} VNĐ`]}
-                        contentStyle={{
-                          backgroundColor: "#000",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          borderRadius: "16px",
-                        }}
-                        itemStyle={{ fontSize: "12px" }}
-                      />
-                      {/* 99.99 Lines (Emerald) */}
-                      <Area
-                        type="monotone"
-                        dataKey="sell"
-                        name="Bán ra 99.99"
-                        stroke="#10b981"
-                        strokeWidth={4}
-                        fill="url(#colorLocal)"
-                        animationDuration={1500}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="buy"
-                        name="Mua vào 99.99"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        fill="transparent"
-                        animationDuration={1500}
-                      />
-                      {/* 990 Lines (Orange) */}
-                      <Area
-                        type="monotone"
-                        dataKey="sell990"
-                        name="Bán ra 990"
-                        stroke="#f97316"
-                        strokeWidth={3}
-                        fill="transparent"
-                        animationDuration={1500}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="buy990"
-                        name="Mua vào 990"
-                        stroke="#f97316"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        fill="transparent"
-                        animationDuration={1500}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <div className="h-[350px] w-full flex items-center justify-center bg-slate-950/10 rounded-2xl border border-white/[0.02]">
+                  {chartData.length === 0 ? (
+                    <p className="text-slate-500 text-sm font-light">Không có dữ liệu lịch sử cho ngày đã chọn</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData}>
+                        <defs>
+                          <linearGradient id="colorLocal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.05} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                        <XAxis dataKey="time" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
+                        <YAxis
+                          domain={["auto", "auto"]}
+                          stroke="#444"
+                          fontSize={10}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(val) => `${(val / 1000).toLocaleString()}k`}
+                        />
+                        <Tooltip
+                          formatter={(value: any) => [`${Number(value).toLocaleString()} VNĐ`]}
+                          contentStyle={{
+                            backgroundColor: "#000",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: "16px",
+                          }}
+                          itemStyle={{ fontSize: "12px" }}
+                        />
+                        {/* 99.99 Lines (Emerald) */}
+                        <Area
+                          type="monotone"
+                          dataKey="sell"
+                          name="Bán ra 99.99"
+                          stroke="#10b981"
+                          strokeWidth={4}
+                          fill="url(#colorLocal)"
+                          animationDuration={1500}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="buy"
+                          name="Mua vào 99.99"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          fill="transparent"
+                          animationDuration={1500}
+                        />
+                        {/* 990 Lines (Orange) */}
+                        <Area
+                          type="monotone"
+                          dataKey="sell990"
+                          name="Bán ra 990"
+                          stroke="#f97316"
+                          strokeWidth={3}
+                          fill="transparent"
+                          animationDuration={1500}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="buy990"
+                          name="Mua vào 990"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          fill="transparent"
+                          animationDuration={1500}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </Card>
 
@@ -447,45 +510,49 @@ export default function GoldTracker() {
                   </div>
                 </div>
 
-                <div className="h-[350px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="colorWorldUsd" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                      <XAxis dataKey="time" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis
-                        domain={["auto", "auto"]}
-                        stroke="#444"
-                        fontSize={10}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(val) => `$${val.toLocaleString()}`}
-                      />
-                      <Tooltip
-                        formatter={(value: any) => [`$${Number(value).toLocaleString()}`]}
-                        contentStyle={{
-                          backgroundColor: "#000",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          borderRadius: "16px",
-                        }}
-                        itemStyle={{ color: "#fff", fontSize: "12px" }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="worldUsd"
-                        name="Giá Thế Giới (USD)"
-                        stroke="#3b82f6"
-                        strokeWidth={4}
-                        fill="url(#colorWorldUsd)"
-                        animationDuration={1500}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <div className="h-[350px] w-full flex items-center justify-center bg-slate-950/10 rounded-2xl border border-white/[0.02]">
+                  {chartData.length === 0 ? (
+                    <p className="text-slate-500 text-sm font-light">Không có dữ liệu lịch sử cho ngày đã chọn</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData}>
+                        <defs>
+                          <linearGradient id="colorWorldUsd" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                        <XAxis dataKey="time" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
+                        <YAxis
+                          domain={["auto", "auto"]}
+                          stroke="#444"
+                          fontSize={10}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(val) => `$${val.toLocaleString()}`}
+                        />
+                        <Tooltip
+                          formatter={(value: any) => [`$${Number(value).toLocaleString()}`]}
+                          contentStyle={{
+                            backgroundColor: "#000",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: "16px",
+                          }}
+                          itemStyle={{ color: "#fff", fontSize: "12px" }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="worldUsd"
+                          name="Giá Thế Giới (USD)"
+                          stroke="#3b82f6"
+                          strokeWidth={4}
+                          fill="url(#colorWorldUsd)"
+                          animationDuration={1500}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </Card>
             </div>

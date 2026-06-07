@@ -31,6 +31,26 @@ export async function GET(request: Request) {
       }
 
       snapshot = await query.orderBy("timestamp", "desc").get();
+    } else if (range === "custom_day") {
+      const startAt = searchParams.get("startAt");
+      const endAt = searchParams.get("endAt");
+
+      if (!startAt || !endAt) {
+        return NextResponse.json({ error: "Missing startAt or endAt parameters for custom_day" }, { status: 400 });
+      }
+
+      const startAtNum = Number(startAt);
+      const startOfDay = new Date(isNaN(startAtNum) ? startAt : startAtNum);
+
+      const endAtNum = Number(endAt);
+      const endDate = new Date(isNaN(endAtNum) ? endAt : endAtNum);
+
+      const query = adminDb
+        .collection("gold_prices")
+        .where("timestamp", ">=", startOfDay.toISOString())
+        .where("timestamp", "<=", endDate.toISOString());
+
+      snapshot = await query.orderBy("timestamp", "desc").get();
     } else if (range === "week") {
       snapshot = await adminDb.collection("gold_prices_6h").orderBy("timestamp", "desc").limit(100).get();
 
